@@ -2,6 +2,10 @@
 
 rebuilds and runs a golang application on file changes in the current working directory.
 
+``` sh
+go install github.com/pietjan/dev-server@latest
+```
+
 ## Config
 The dev-server config can specified in either json or yml/yaml
 
