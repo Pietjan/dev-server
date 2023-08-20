@@ -1,13 +1,16 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"runtime"
 	"strings"
+	"syscall"
 	"time"
 
 	"log/slog"
@@ -81,8 +84,28 @@ func main() {
 
 	router.NotFound = proxy
 
+	server := &http.Server{Addr: fmt.Sprintf(`:%d`, config.Server), Handler: router}
+
+	signals := make(chan os.Signal, 1)
+	done := make(chan struct{})
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		<-signals
+		if err := runner.Stop(); err != nil {
+			logger.With(`error`, err).Error(`failed to stop target`)
+		}
+		if err := server.Shutdown(context.Background()); err != nil {
+			logger.With(`error`, err).Error(`failed to stop server`)
+		}
+		close(done)
+	}()
+
 	go open(fmt.Sprintf(`http://localhost:%d`, config.Server))
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(`:%d`, config.Server), router))
+	if err := server.ListenAndServe(); err != nil {
+		log.Fatal(err)
+	}
+	<-done
 }
 
 func hotReloadScript(w http.ResponseWriter, r *http.Request, p httprouter.Params) {

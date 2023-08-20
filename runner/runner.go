@@ -12,6 +12,7 @@ type Option = func(*runner)
 
 type Runner interface {
 	Exec() error
+	Stop() error
 }
 
 // New Runner
@@ -44,6 +45,21 @@ type runner struct {
 	build  []command
 	target command
 	cmd    *exec.Cmd
+}
+
+// Stop implements Runner.
+func (r *runner) Stop() error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	if r.cmd != nil {
+		err := r.cmd.Process.Kill()
+		if err != nil {
+			return err
+		}
+	}
+
+	return os.Remove(r.target.name)
 }
 
 type command struct {
