@@ -1,6 +1,9 @@
 package watcher
 
 import (
+	"bytes"
+	"crypto/md5"
+	"encoding/hex"
 	"io/fs"
 	"os"
 	"regexp"
@@ -38,14 +41,20 @@ type watcher struct {
 	watch     fs.FS
 	lastCheck time.Time
 	exclude   []*regexp.Regexp
+	watched   []file
+}
+
+type file struct {
+	name string
+	hash string
 }
 
 // Changes implements Watcher.
 func (w *watcher) Changes() (changes []string, err error) {
 	w.mutex.Lock()
-	checkTime := time.Now()
 	defer w.mutex.Unlock()
 
+	checkTime := time.Now()
 	if w.lastCheck.IsZero() {
 		w.lastCheck = checkTime
 		return
@@ -67,9 +76,33 @@ func (w *watcher) Changes() (changes []string, err error) {
 			return err
 		}
 
-		if f.ModTime().After(w.lastCheck) {
-			changes = append(changes, path)
+		if f.ModTime().Before(w.lastCheck) {
+			return nil
 		}
+
+		b, err := fs.ReadFile(w.watch, path)
+		if err != nil {
+			return err
+		}
+
+		sum := md5.Sum(bytes.TrimSpace(b))
+		hash := hex.EncodeToString(sum[:])
+		index := getWatched(path, w.watched)
+
+		if index < 0 {
+			w.watched = append(w.watched, file{
+				name: path,
+				hash: hash,
+			})
+		} else {
+			if w.watched[index].hash == hash {
+				return nil
+			}
+
+			w.watched[index].hash = hash
+		}
+
+		changes = append(changes, path)
 
 		return nil
 	})
@@ -79,4 +112,14 @@ func (w *watcher) Changes() (changes []string, err error) {
 	}
 
 	return
+}
+
+func getWatched(name string, watched []file) int {
+	for i, f := range watched {
+		if f.name == name {
+			return i
+		}
+	}
+
+	return -1
 }
