@@ -16,6 +16,7 @@ type config struct {
 	Exclude  []string      `json:"exclude,omitempty"`
 	Build    string        `json:"build,omitempty"`
 	Target   string        `json:"target,omitempty"`
+	Wait     []string      `json:"wait,omitempty"`
 	Server   int           `json:"server,omitempty"`
 	Proxy    int           `json:"proxy,omitempty"`
 }

@@ -15,6 +15,7 @@ import (
 
 	"log/slog"
 
+	"github.com/antelman107/net-wait-go/wait"
 	"github.com/julienschmidt/httprouter"
 	"github.com/lmittmann/tint"
 	"github.com/pietjan/dev-server/proxy"
@@ -48,6 +49,11 @@ func main() {
 		proxy.Target(fmt.Sprintf(`http://localhost:%d`, config.Proxy)),
 	)
 
+	if !wait.New().Do(config.Wait) {
+		logger.Error(`timeout waiting for services`)
+		os.Exit(1)
+	}
+
 	messages := make(chan string)
 
 	go func() {
@@ -70,8 +76,8 @@ func main() {
 					log.With(`error`, err).Error(`runner error`)
 				}
 
-				messages <- strings.Join(changes, `,`)
 				time.Sleep(time.Millisecond * config.Interval)
+				messages <- strings.Join(changes, `,`)
 			}
 
 			time.Sleep(time.Millisecond)
@@ -100,6 +106,11 @@ func main() {
 		}
 		close(done)
 	}()
+
+	if !wait.New().Do([]string{fmt.Sprintf(`:%d`, config.Proxy)}) {
+		logger.Error(`target is not available`)
+		os.Exit(1)
+	}
 
 	go open(fmt.Sprintf(`http://localhost:%d`, config.Server))
 	if err := server.ListenAndServe(); err != nil {
