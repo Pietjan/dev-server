@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -16,6 +18,7 @@ import (
 	"log/slog"
 
 	"github.com/antelman107/net-wait-go/wait"
+	"github.com/ghodss/yaml"
 	"github.com/julienschmidt/httprouter"
 	"github.com/lmittmann/tint"
 	"github.com/pietjan/dev-server/proxy"
@@ -34,6 +37,13 @@ var script string
 
 func main() {
 	config := loadConfig()
+
+	configFlag := flag.String(`config`, ``, `example config, specify a format: yaml, json`)
+	flag.Parse()
+
+	if isFlagPassed(`config`) {
+		printConfig(config, *configFlag)
+	}
 
 	logger := slog.New(tint.NewHandler(os.Stdout, nil))
 	slog.SetDefault(slog.New(
@@ -80,7 +90,7 @@ func main() {
 				messages <- strings.Join(changes, `,`)
 			}
 
-			time.Sleep(time.Millisecond)
+			time.Sleep(time.Millisecond * config.Interval)
 		}
 	}()
 
@@ -173,4 +183,32 @@ func open(url string) error {
 
 	args = append(args, url)
 	return exec.Command(cmd, args...).Start()
+}
+
+func isFlagPassed(name string) bool {
+	found := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			found = true
+		}
+	})
+	return found
+}
+
+func printConfig(c config, format string) {
+	c.Wait = append(c.Wait, `postgres:5432`, `sqlserver:1433`)
+
+	switch format {
+	case `json`:
+		b, _ := json.MarshalIndent(c, ``, `  `)
+		fmt.Println(string(b))
+
+	default:
+		b, _ := yaml.Marshal(c)
+		fmt.Println(`---`)
+		fmt.Println(string(b))
+		fmt.Println(`...`)
+	}
+
+	os.Exit(0)
 }

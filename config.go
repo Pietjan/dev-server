@@ -12,13 +12,13 @@ import (
 )
 
 type config struct {
-	Interval time.Duration `json:"interval,omitempty"`
-	Exclude  []string      `json:"exclude,omitempty"`
-	Build    string        `json:"build,omitempty"`
-	Target   string        `json:"target,omitempty"`
-	Wait     []string      `json:"wait,omitempty"`
-	Server   int           `json:"server,omitempty"`
-	Proxy    int           `json:"proxy,omitempty"`
+	Interval time.Duration `json:"interval"`
+	Exclude  []string      `json:"exclude"`
+	Build    string        `json:"build"`
+	Target   string        `json:"target"`
+	Wait     []string      `json:"wait"`
+	Server   int           `json:"server"`
+	Proxy    int           `json:"proxy"`
 }
 
 func (c config) watcher() (options []watcher.Option) {
@@ -64,7 +64,7 @@ func fromFile(c *config) error {
 
 func defaults(c *config) {
 	if c.Interval == 0 {
-		c.Interval = 500
+		c.Interval = 300
 	}
 
 	if len(c.Exclude) == 0 {
