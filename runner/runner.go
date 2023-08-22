@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+
+	"log/slog"
 )
 
 type Option = func(*runner)
@@ -17,7 +19,13 @@ type Runner interface {
 
 // New Runner
 func New(options ...Option) Runner {
-	r := &runner{}
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+
+	r := &runner{
+		ctx:    ctx,
+		cancel: cancel,
+	}
 
 	for _, fn := range options {
 		fn(r)
@@ -28,7 +36,7 @@ func New(options ...Option) Runner {
 
 func Build(name string, args ...string) func(*runner) {
 	return func(r *runner) {
-		r.build = append(r.build, command{name: name, args: args})
+		r.build = command{name: name, args: args}
 	}
 }
 
@@ -42,7 +50,8 @@ type runner struct {
 	mutex  sync.Mutex
 	ctx    context.Context
 	cancel context.CancelFunc
-	build  []command
+	log    *slog.Logger
+	build  command
 	target command
 	cmd    *exec.Cmd
 }
@@ -52,12 +61,9 @@ func (r *runner) Stop() error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
-	if r.cmd != nil {
-		err := r.cmd.Process.Kill()
-		if err != nil {
-			return err
-		}
-	}
+	r.cancel()
+
+	<-r.ctx.Done()
 
 	return os.Remove(r.target.name)
 }
@@ -72,41 +78,29 @@ func (r *runner) Exec() error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
-	if err := build(r.build); err != nil {
+	build := toExecCmd(r.ctx, r.build)
+	if err := build.Run(); err != nil {
 		return err
 	}
 
-	if r.cmd != nil {
-		err := r.cmd.Process.Kill()
-		if err != nil {
+	if r.cmd != nil && r.cmd.Process != nil {
+		if err := r.cmd.Process.Kill(); err != nil {
 			return err
 		}
 	}
 
-	r.cmd = toCommand(r.target)
-	go func() {
-		if err := r.cmd.Run(); err != nil {
-			log.Println(err)
-		}
-	}()
-
-	return nil
-}
-
-func build(commands []command) error {
-	for _, c := range commands {
-		cmd := toCommand(c)
-		if err := cmd.Run(); err != nil {
-			return err
-		}
+	r.cmd = toExecCmd(r.ctx, r.target)
+	if err := r.cmd.Start(); err != nil {
+		log.Println(err)
 	}
 
 	return nil
 }
 
-func toCommand(c command) *exec.Cmd {
-	cmd := exec.Command(c.name, c.args...)
+func toExecCmd(ctx context.Context, c command) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, c.name, c.args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stdout
+
 	return cmd
 }
