@@ -30,9 +30,11 @@ func New(options ...Option) Watcher {
 	return w
 }
 
-func Exclude(pattern string) func(*watcher) {
+func Exclude(patterns ...string) func(*watcher) {
 	return func(w *watcher) {
-		w.exclude = append(w.exclude, regexp.MustCompile(pattern))
+		for _, pattern := range patterns {
+			w.exclude = append(w.exclude, regexp.MustCompile(pattern))
+		}
 	}
 }
 

@@ -1,39 +1,28 @@
 # dev-server
 
-rebuilds and runs a golang application on file changes in the current working directory.
+rebuilds and runs a command on file changes in the current working directory.
 
+## Install
 ``` sh
 go install github.com/pietjan/dev-server@latest
 ```
 
-## Config
-The dev-server config can specified in either json or yml/yaml
-
-.dev-server.yml / .dev-server.yaml
-``` yaml 
-interval: 500 
-exclude: 
-  - ^bin/
-  - ^\.
-  - \/\.(\w+)$]
-build: ./
-target: ./bin/__dev-server_target
-server: 42069
-proxy: 8080
+## Run
+``` sh
+dev-server --build.cmd "make build" --build.bin "/tmp/bin/my-program"
 ```
 
-.dev-server.json
-``` json 
-{
-  "interval": 500,
-  "exclude": [
-    "^bin/",
-    "^\\.",
-    "\\/\\.(\\w+)$"
-  ],
-  "build": "./",
-  "target": "./bin/__dev-server_target",
-  "server": 42069,
-  "proxy": 8080
-}
+full example
+``` sh
+dev-server \
+--build.cmd "make build" \
+--build.bin "/tmp/bin/my-program" \
+--watcher.exclude "\/\.(\w+)$" \
+--watcher.exclude "^bin/" \
+--watcher.interval 400ms \
+--proxy.port 42069 \
+--proxy.target 8080 \
+--wait.for localhost:5432 \
+--wait.for localhost:3306 \
+--debug
 ```
