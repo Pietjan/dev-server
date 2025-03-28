@@ -58,11 +58,42 @@ type transport struct {
 func (t *transport) RoundTrip(req *http.Request) (resp *http.Response, err error) {
 	slog.Debug("roundtrip-start", "method", req.Method, "url", req.URL.String())
 
+	// Bypass WebSocket connections
+	if req.Header.Get("Upgrade") == "websocket" {
+		slog.Debug("bypassing websocket connection", "url", req.URL.String())
+		return t.RoundTripper.RoundTrip(req)
+	}
+
 	// Call the original RoundTripper
 	resp, err = t.RoundTripper.RoundTrip(req)
 	if err != nil {
 		slog.Debug("roundtrip-error", "error", err)
 		return nil, err
+	}
+
+	// Bypass responses with 101 Switching Protocols
+	if resp.StatusCode == http.StatusSwitchingProtocols {
+		slog.Debug("bypassing 101 switching protocols", "url", req.URL.String())
+		return resp, nil
+	}
+
+	// Bypass non-HTML responses
+	contentType := resp.Header.Get("Content-Type")
+	if contentType == "" || !bytes.Contains([]byte(contentType), []byte("text/html")) {
+		slog.Debug("bypassing non-HTML response", "content-type", contentType, "url", req.URL.String())
+		return resp, nil
+	}
+
+	// Bypass chunked or streaming responses
+	if resp.Header.Get("Transfer-Encoding") == "chunked" {
+		slog.Debug("bypassing chunked transfer encoding response", "url", req.URL.String())
+		return resp, nil
+	}
+
+	// Bypass compressed responses
+	if resp.Header.Get("Content-Encoding") != "" {
+		slog.Debug("bypassing compressed response", "encoding", resp.Header.Get("Content-Encoding"), "url", req.URL.String())
+		return resp, nil
 	}
 
 	// Log the response
