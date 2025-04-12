@@ -5,6 +5,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"io/fs"
+	"log/slog"
 	"os"
 	"regexp"
 	"sync"
@@ -69,6 +70,7 @@ func (w *watcher) Changes() (changes []string, err error) {
 
 		for _, e := range w.exclude {
 			if e.MatchString(path) {
+				slog.Debug("file-excluded", "path", path, "pattern", e.String())
 				return nil
 			}
 		}
@@ -79,6 +81,7 @@ func (w *watcher) Changes() (changes []string, err error) {
 		}
 
 		if f.ModTime().Before(w.lastCheck) {
+			slog.Debug("file-not-changed", "path", path, "mod-time", f.ModTime(), "last-check", w.lastCheck)
 			return nil
 		}
 
@@ -92,15 +95,18 @@ func (w *watcher) Changes() (changes []string, err error) {
 		index := getWatched(path, w.watched)
 
 		if index < 0 {
+			slog.Debug("file-added", "path", path, "hash", hash)
 			w.watched = append(w.watched, file{
 				name: path,
 				hash: hash,
 			})
 		} else {
 			if w.watched[index].hash == hash {
+				slog.Debug("file-not-changed", "path", path, "hash", hash)
 				return nil
 			}
 
+			slog.Debug("file-updated", "path", path, "hash", hash)
 			w.watched[index].hash = hash
 		}
 
