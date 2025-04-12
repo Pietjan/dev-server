@@ -98,7 +98,6 @@ func (w *watcher) Changes() (changes []string, err error) {
 		}
 
 		if f.ModTime().Before(w.lastCheck) {
-			slog.Debug("file-not-changed", "path", relPath, "mod-time", f.ModTime(), "last-check", w.lastCheck)
 			return nil
 		}
 
