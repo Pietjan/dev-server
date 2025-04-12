@@ -7,9 +7,12 @@ import (
 	"io/fs"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sync"
 	"time"
+
+	"github.com/bmatcuk/doublestar/v4"
 )
 
 type Option = func(*watcher)
@@ -31,20 +34,33 @@ func New(options ...Option) Watcher {
 	return w
 }
 
-func Exclude(patterns ...string) func(*watcher) {
+func ExcludeRegex(patterns ...string) func(*watcher) {
 	return func(w *watcher) {
 		for _, pattern := range patterns {
-			w.exclude = append(w.exclude, regexp.MustCompile(pattern))
+			w.excludeRegex = append(w.excludeRegex, regexp.MustCompile(pattern))
+		}
+	}
+}
+
+func ExcludePattern(patterns ...string) func(*watcher) {
+	return func(w *watcher) {
+		for _, pattern := range patterns {
+			if !doublestar.ValidatePathPattern(pattern) {
+				panic("invalid pattern " + pattern)
+			}
+
+			w.excludePattern = append(w.excludePattern, pattern)
 		}
 	}
 }
 
 type watcher struct {
-	mutex     sync.Mutex
-	watch     fs.FS
-	lastCheck time.Time
-	exclude   []*regexp.Regexp
-	watched   []file
+	mutex          sync.Mutex
+	watch          fs.FS
+	lastCheck      time.Time
+	excludeRegex   []*regexp.Regexp
+	excludePattern []string
+	watched        []file
 }
 
 type file struct {
@@ -63,16 +79,17 @@ func (w *watcher) Changes() (changes []string, err error) {
 		return
 	}
 
-	err = fs.WalkDir(w.watch, `.`, func(path string, d fs.DirEntry, err error) error {
+	root := "."
+
+	err = fs.WalkDir(w.watch, root, func(pathStr string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
 		}
 
-		for _, e := range w.exclude {
-			if e.MatchString(path) {
-				slog.Debug("file-excluded", "path", path, "pattern", e.String())
-				return nil
-			}
+		relPath, _ := filepath.Rel(root, pathStr)
+
+		if isExclude(relPath, w.excludePattern, w.excludeRegex) {
+			return nil
 		}
 
 		f, err := d.Info()
@@ -81,36 +98,34 @@ func (w *watcher) Changes() (changes []string, err error) {
 		}
 
 		if f.ModTime().Before(w.lastCheck) {
-			slog.Debug("file-not-changed", "path", path, "mod-time", f.ModTime(), "last-check", w.lastCheck)
+			slog.Debug("file-not-changed", "path", relPath, "mod-time", f.ModTime(), "last-check", w.lastCheck)
 			return nil
 		}
 
-		b, err := fs.ReadFile(w.watch, path)
+		b, err := fs.ReadFile(w.watch, pathStr)
 		if err != nil {
 			return err
 		}
 
 		sum := md5.Sum(bytes.TrimSpace(b))
 		hash := hex.EncodeToString(sum[:])
-		index := getWatched(path, w.watched)
+		index := getWatched(pathStr, w.watched)
 
 		if index < 0 {
-			slog.Debug("file-added", "path", path, "hash", hash)
+			slog.Debug("file-added", "path", relPath, "hash", hash)
 			w.watched = append(w.watched, file{
-				name: path,
+				name: pathStr,
 				hash: hash,
 			})
 		} else {
 			if w.watched[index].hash == hash {
-				slog.Debug("file-not-changed", "path", path, "hash", hash)
 				return nil
 			}
 
-			slog.Debug("file-updated", "path", path, "hash", hash)
 			w.watched[index].hash = hash
 		}
 
-		changes = append(changes, path)
+		changes = append(changes, pathStr)
 
 		return nil
 	})
@@ -130,4 +145,22 @@ func getWatched(name string, watched []file) int {
 	}
 
 	return -1
+}
+
+func isExclude(file string, pattern []string, regexes []*regexp.Regexp) bool {
+	for _, p := range pattern {
+		if matched, _ := doublestar.PathMatch(p, file); matched {
+			slog.Debug("file-excluded", "path", file, "pattern", p)
+			return true
+		}
+	}
+
+	for _, r := range regexes {
+		if r.MatchString(file) {
+			slog.Debug("file-excluded", "path", file, "regex", r.String())
+			return true
+		}
+	}
+
+	return false
 }

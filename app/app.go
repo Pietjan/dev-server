@@ -29,7 +29,8 @@ func New(config config.Settings) *App {
 			runner.Port(config.Proxy.Target),
 		),
 		watcher: watcher.New(
-			watcher.Exclude(config.Watcher.Exclude...),
+			watcher.ExcludePattern(config.Watcher.ExcludePattern...),
+			watcher.ExcludeRegex(config.Watcher.ExcludeRegex...),
 		),
 		ticker: time.NewTicker(config.Watcher.Interval),
 	}

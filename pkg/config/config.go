@@ -24,8 +24,9 @@ type Build struct {
 }
 
 type Watcher struct {
-	Interval time.Duration `json:"interval"`
-	Exclude  slice         `json:"exclude"`
+	Interval       time.Duration `json:"interval"`
+	ExcludePattern slice         `json:"exclude"`
+	ExcludeRegex   slice         `json:"exclude-regex"`
 }
 
 type Proxy struct {
@@ -66,7 +67,8 @@ func Load() (Settings, error) {
 	flag.StringVar(&settings.Build.Bin, "build.bin", settings.Build.Bin, "binary path")
 
 	flag.DurationVar(&settings.Watcher.Interval, "watcher.interval", settings.Watcher.Interval, "watcher interval")
-	flag.Var(&settings.Watcher.Exclude, "watcher.exclude", "exclude patterns")
+	flag.Var(&settings.Watcher.ExcludePattern, "watcher.exclude", "exclude patterns")
+	flag.Var(&settings.Watcher.ExcludeRegex, "watcher.exclude-regex", "exclude regex patterns")
 
 	flag.IntVar(&settings.Proxy.Port, "proxy.port", settings.Proxy.Port, "proxy port")
 	flag.IntVar(&settings.Proxy.Target, "proxy.target", settings.Proxy.Target, "proxy target")
