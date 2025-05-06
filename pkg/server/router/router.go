@@ -38,7 +38,7 @@ func WS(processor *events.Processor) func(*http.ServeMux) {
 func LiveReloadWS(script string) func(*http.ServeMux) {
 	return func(router *http.ServeMux) {
 		router.HandleFunc("/__dev-server/ws-live-reload.js", func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/javascript")
+			w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 			fmt.Fprint(w, script)
 		})
 	}
